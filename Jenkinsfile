@@ -7,6 +7,9 @@ pipeline {
                 echo 'Hello, World!'
                 echo 'hii jenkins'
             }
+            stage('build') {
+                steps{
+                    echo('hello build')
         }
     }
 }
