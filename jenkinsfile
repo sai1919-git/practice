@@ -1,2 +1,11 @@
-print("hello wolrd")
-print("second step")
+pipeline {
+    agent any
+
+    stages {
+        stage('Hello Stage') {
+            steps {
+                echo 'Hello, World!'
+            }
+        }
+    }
+}
