@@ -1,42 +1,65 @@
 pipeline {
-    agent any
+    agent any   // Run this pipeline on any available Jenkins machine
+
     environment {
-        IMAGE_NAME = "sai604/mydocker"
-        AWS_REGION = "us-east-1"
-        ECR_REPO = "123456789012.dkr.ecr.us-east-1.amazonaws.com/mydocker"
+        IMAGE_NAME = "myapp"   // This is the name of your Docker image
+        AWS_REGION = "us-east-1"   // AWS region where your ECR is
+        AWS_ACCOUNT_ID = "123456789012"   // Your AWS account number
+        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}" // This builds the full ECR path
     }
+
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/sai1919-git/practice.git'
+                // Pulls your code from GitHub
+                git branch: 'main', url: 'https://github.com/your-username/your-repo.git'
             }
         }
+
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t $IMAGE_NAME:latest ."
+                // Creates a Docker image from your code
+                sh "docker build -t ${IMAGE_NAME}:latest ."
             }
         }
-        stage('Login and Push to ECR') {
+
+        stage('Login to AWS ECR') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'aws-ecr-credentials', 
-                    usernameVariable: 'AWS_ACCESS_KEY_ID', 
-                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials-id', // The Jenkins stored AWS credentials ID
+                        usernameVariable: 'AWS_ACCESS_KEY_ID', // Make AWS key available
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY' // Make AWS secret key available
+                    )
+                ]) {
+                    // This logs into AWS using your credentials
                     sh '''
                         aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
                         aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-                        aws configure set default.region "$AWS_REGION"
-                        
-                        aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin $ECR_REPO
-                        
-                        docker tag $IMAGE_NAME:latest $ECR_REPO:latest
-                        docker push $ECR_REPO:latest
-                        
-                        docker logout $ECR_REPO
+                        aws configure set default.region "${AWS_REGION}"
+                        aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin ${ECR_REPO}
                     '''
                 }
             }
         }
+
+        stage('Push to AWS ECR') {
+            steps {
+                // Tags the image and uploads it to AWS ECR
+                sh '''
+                    docker tag ${IMAGE_NAME}:latest ${ECR_REPO}:latest
+                    docker push ${ECR_REPO}:latest
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            // Removes the image from the local machine after the process
+            sh "docker rmi ${IMAGE_NAME}:latest || true"
+            sh "docker rmi ${ECR_REPO}:latest || true"
+        }
     }
 }
+
